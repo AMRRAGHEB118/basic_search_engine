@@ -1,6 +1,3 @@
-from math import ceil
-
-
 def compute_frequency(documents):
     term_frequency = {}
     for doc_id, terms in enumerate(documents, start=1):
