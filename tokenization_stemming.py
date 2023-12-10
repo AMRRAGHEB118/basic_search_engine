@@ -43,4 +43,4 @@ def apply_tokenization_and_stemming(terms):
     for file in files_name:
         tokens = process_file("files/" + file)
         terms.append(tokens)
-    print(terms)
+    return terms
