@@ -34,7 +34,7 @@ def apply_stemmer(tokens):
 def process_file(file):
     text = read_file(file)
     tokens = tokenize(text)
-    tokens = remove_stop_words(tokens)
+    # tokens = remove_stop_words(tokens)
     tokens = apply_stemmer(tokens)
     return tokens
 
@@ -43,4 +43,5 @@ def apply_tokenization_and_stemming(terms):
     for file in files_name:
         tokens = process_file("files/" + file)
         terms.append(tokens)
+        print(tokens)
     return terms
