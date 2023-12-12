@@ -1,5 +1,3 @@
-from math import log
-
 def display_term_frequency(term_frequency):
     terms = sorted(term_frequency.keys())
     header = ["Term"] + [f"Doc{i}" for i in range(1, 11)]
