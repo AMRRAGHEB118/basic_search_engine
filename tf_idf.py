@@ -53,13 +53,12 @@ def get_docs_len(tf_idf):
 
 def get_normalized_tf_idf(docs_len, col, x):
     try:
-        return x / docs_len[col+'_length'].values[0]
+        return x / docs_len[col]
     except:
         return 0
 
 def compute_normalized_tf_idf(tf_idf, docs_len):
-    norm_tf_idf = pd.DataFrame()
+    normalized_tf_idf = pd.DataFrame()
     for col in tf_idf.columns:
-        norm_tf_idf[col] = tf_idf[col].apply(lambda x : get_normalized_tf_idf(docs_len, col, x))
-
-    return norm_tf_idf
+        normalized_tf_idf[col] = tf_idf[col].apply(lambda x : get_normalized_tf_idf(docs_len, col, x))
+    return normalized_tf_idf

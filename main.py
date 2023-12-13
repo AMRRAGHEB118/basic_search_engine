@@ -1,4 +1,4 @@
-from phrase_query import insert_query, put_query
+from phrase_query import insert_query
 from positional_index import create_positional_index, display_positional_index
 from tf_idf import apply_weighted_tf, compute_df_idf, compute_normalized_tf_idf, compute_tf, compute_tf_idf, get_docs_len
 from tokenization_stemming import apply_tokenization_and_stemming, read_documents
