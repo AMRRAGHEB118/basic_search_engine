@@ -38,10 +38,24 @@ def process_file(file):
     tokens = apply_stemmer(tokens)
     return tokens
 
-def apply_tokenization_and_stemming(terms):
+def apply_tokenization_and_stemming():
+    terms = []
     handle_stopwords()
     for file in files_name:
         tokens = process_file("files/" + file)
         terms.append(tokens)
         print(tokens)
     return terms
+
+def preprocessing(q):
+    q = tokenize(q)
+    q = apply_stemmer(q)
+    return q
+
+def read_documents(directory="files"):
+    documents = []
+    for file in natsort.natsorted(os.listdir(directory)):
+        with open(os.path.join(directory, file), "r") as f:
+            document = f.read()
+            documents.append(document)
+    return documents

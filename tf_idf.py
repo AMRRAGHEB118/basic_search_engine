@@ -1,49 +1,65 @@
-from math import log
+from math import log10
+import numpy as np
+import pandas as pd
 
+def get_tf(document, all_terms):
+    wordDict = dict.fromkeys(all_terms, 0)
+    for word in document.split():
+        wordDict[word] += 1
+    return wordDict
 
 def compute_tf(documents):
-    term_frequency = {}
-    for doc_id, terms in enumerate(documents, start=1):
-        for term in terms:
-            if term not in term_frequency:
-                term_frequency[term] = {f"Doc{doc_id}": 1}
-            else:
-                term_frequency[term][f"Doc{doc_id}"] = term_frequency[term].get(f"Doc{doc_id}", 0) + 1
-    return term_frequency
+    all_terms = list(set(term for doc in documents for term in doc.split()))
+    tf = pd.DataFrame(get_tf(documents[0], all_terms).values(), index=all_terms)
+    for i in range(1, len(documents)):
+        tf[i] = get_tf(documents[i], all_terms).values()
+    tf.columns = ['doc'+str(i) for i in range(1, 11)]
+    return tf
 
-def compute_normalized_tf(documents):
-    term_frequency = {}
+def weighted_tf(x):
+    if x > 0:
+        return log10(x) + 1
+    return 0
 
-    for doc_id, terms in enumerate(documents, start=1):
-        total_terms = len(terms)
+def apply_weighted_tf(documents, tf):
+    w_tf = tf.copy()
+    for i in range(0, len(documents)):
+        w_tf['doc'+str(i+1)] = tf['doc'+str(i+1)].apply(weighted_tf)
+    return w_tf
 
-        for term in terms:
-            if term not in term_frequency:
-                term_frequency[term] = {f"Doc{doc_id}": round(terms.count(term) / total_terms, 2)}
-            else:
-                term_frequency[term][f"Doc{doc_id}"] = round(terms.count(term) / total_terms, 2)
+def compute_df_idf(w_tf, tf):
+    tdf = pd.DataFrame(columns=['df', 'idf'])
+    for i in range(len(tf)):
+        in_term = w_tf.iloc[i].values.sum()
+        tdf.loc[i, 'df'] = in_term
+        tdf.loc[i, 'idf'] = log10(10 / (float(in_term)))
+    tdf.index=w_tf.index
 
-    return term_frequency
+    return tdf
 
-def compute_idf(documents):
-    idf = {}
-    total_docs = len(documents)
+def compute_tf_idf(w_tf, tdf):
+    tf_idf = w_tf.multiply(tdf['idf'], axis=0)
+    return tf_idf
 
-    for term in set(term for doc in documents for term in doc):
-        doc_count = sum(1 for doc in documents if term in doc)
-        idf[term] = round(log(total_docs / (1 + doc_count)), 2)
 
-    return idf
+def get_doc_len(col):
+    return np.sqrt(col.apply(lambda x: x**2).sum())
 
-def compute_tf_idf(documents, idf):
-    tf_idf_matrix = {}
+def get_docs_len(tf_idf):
+    docs_len = {}
+    for col in tf_idf.columns:
+        docs_len[col] = get_doc_len(tf_idf[col])
+    return docs_len
 
-    for doc_id, terms in enumerate(documents, start=1):
-        tf_idf_matrix[doc_id] = {}
-        total_terms = len(terms)
+def get_normalized_tf_idf(docs_len, col, x):
+    try:
+        return x / docs_len[col+'_length'].values[0]
+    except:
+        return 0
 
-        for term in set(terms):
-            tf = terms.count(term) / total_terms
-            tf_idf_matrix[doc_id][term] = round(tf * idf.get(term, 0), 2)
+def compute_normalized_tf_idf(tf_idf, docs_len):
+    norm_tf_idf = pd.DataFrame()
+    for col in tf_idf.columns:
+        norm_tf_idf[col] = tf_idf[col].apply(lambda x : get_normalized_tf_idf(docs_len, col, x))
 
-    return tf_idf_matrix
+    return norm_tf_idf
