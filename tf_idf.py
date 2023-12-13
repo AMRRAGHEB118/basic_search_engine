@@ -31,16 +31,13 @@ def compute_df_idf(w_tf, tf):
     tdf = pd.DataFrame(columns=['df', 'idf'])
     for i in range(len(tf)):
         in_term = w_tf.iloc[i].values.sum()
-        tdf.loc[i, 'df'] = in_term
-        tdf.loc[i, 'idf'] = log10(10 / (float(in_term)))
-    tdf.index=w_tf.index
-
+        tdf.loc[tf.index[i], 'df'] = in_term
+        tdf.loc[tf.index[i], 'idf'] = log10(10 / (float(in_term))) if in_term > 0 else 0
     return tdf
 
 def compute_tf_idf(w_tf, tdf):
     tf_idf = w_tf.multiply(tdf['idf'], axis=0)
     return tf_idf
-
 
 def get_doc_len(col):
     return np.sqrt(col.apply(lambda x: x**2).sum())
@@ -60,5 +57,5 @@ def get_normalized_tf_idf(docs_len, col, x):
 def compute_normalized_tf_idf(tf_idf, docs_len):
     normalized_tf_idf = pd.DataFrame()
     for col in tf_idf.columns:
-        normalized_tf_idf[col] = tf_idf[col].apply(lambda x : get_normalized_tf_idf(docs_len, col, x))
+        normalized_tf_idf[col] = tf_idf[col].apply(lambda x: get_normalized_tf_idf(docs_len, col, x))
     return normalized_tf_idf

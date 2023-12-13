@@ -38,7 +38,7 @@ def main():
         if query.lower() == 'exit':
             break
 
-        insert_query(query, positional_index, tf_idf, normalized_tf_idf)
+        insert_query(query, positional_index, df_idf, normalized_tf_idf)
 
 
 if __name__ == "__main__":
