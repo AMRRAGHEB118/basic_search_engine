@@ -2,12 +2,12 @@ import pandas as pd
 from math import log10, sqrt
 from tokenization_stemming import preprocessing
 
-
 def insert_query(q, positional_index, tdf, normalized_tf_idf):
     docs_found = put_query(q, positional_index, 2)
-    if docs_found == []:
+    if not docs_found:
         return "Not Found"
     
+    print("Documents Found: ", docs_found)
     new_q = preprocessing(q)
     query = pd.DataFrame(index=normalized_tf_idf.index)
     query['tf'] = [1 if x in new_q else 0 for x in list(normalized_tf_idf.index)]
@@ -19,21 +19,36 @@ def insert_query(q, positional_index, tdf, normalized_tf_idf):
     for i in range(len(query)):
         query.loc[query.index[i], 'normalized'] = float(query['idf'].iloc[i]) / sqrt(sum(query['idf'].values**2)) if sum(query['idf'].values**2) != 0 else 0
     
+    print('Query') 
+    print(q)
+    print()
+    print('Query Tokenized')
+    print(new_q)
+    print()
     print('Query Details')
-    print(query.loc[new_q])
-    
+    if any(term in query.index for term in new_q):
+        if isinstance(new_q, list):
+            print(query[query.index.isin(new_q)])
+        else:
+            print(query.loc[new_q])
+    else:
+        print("None of the terms in the query are present in the DataFrame index.")
+
     product = normalized_tf_idf.multiply(query['w_tf'], axis=0)
     product_result = product.multiply(query['normalized'], axis=0)
     
     print()
     print('Product (query*matched doc)')
-    print(product_result.loc[new_q])
+    if any(term in product_result.index for term in new_q):
+        print(product_result.loc[product_result.index.isin(new_q)])
+    else:
+        print("None of the terms in the query are present in the DataFrame index.")
     print()
     print('Product Sum')
     print(product_result.sum())
     print()
     print('Query Length')
-    q_len = sqrt(sum([x**2 for x in query['idf'].loc[new_q]]))
+    q_len = sqrt(sum([x**2 for x in query['idf'].loc[list(set(new_q).intersection(query.index))]]))
     print(q_len)
     print()
     print('Cosine Similarity')
@@ -50,32 +65,41 @@ def insert_query(q, positional_index, tdf, normalized_tf_idf):
         print(tuple[0], end=" ")
 
 
+
 def put_query(q, positional_index, display=1):
     lis = [[] for i in range(10)]
     q = preprocessing(q)
-
+    
+    present_terms = []
+    
     for term in q:
-        term_lower = term.lower()  # Ensure lowercase for case-insensitive matching
-        if term_lower in positional_index.keys():
-            for doc_id, positions in positional_index[term_lower]['positions'].items():
+        if term in positional_index.keys():
+            present_terms.append(term)
+            for doc_id, positions in positional_index[term]['positions'].items():
                 if lis[doc_id - 1] != []:
                     if lis[doc_id - 1][-1] == positions[0] - 1:
                         lis[doc_id - 1].append(positions[0])
                 else:
                     lis[doc_id - 1].append(positions[0])
-
+    
     positions = []
-
-    if display == 1:
-        for pos, lst in enumerate(lis, start=1):
-            if len(lst) == len(q):
-                positions.append('document ' + str(pos))
+    
+    if len(present_terms) == len(q):
+        if display == 1:
+            for pos, lst in enumerate(lis, start=1):
+                if len(lst) == len(q):
+                    positions.append('document ' + str(pos))
+        else:
+            for pos, lst in enumerate(lis, start=1):
+                if len(lst) == len(q):
+                    positions.append('doc' + str(pos))
         return positions
     else:
-        for pos, lst in enumerate(lis, start=1):
-            if len(lst) == len(q):
-                positions.append('doc' + str(pos))
-        return positions
+        # Print terms that are not present in the index
+        missing_terms = set(q) - set(present_terms)
+        print(f"Terms not found in the index: {missing_terms}")
+        return []
+
 
 def get_w_tf(x):
     try:
