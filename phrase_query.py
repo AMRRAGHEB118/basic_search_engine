@@ -1,108 +1,90 @@
+from math import sqrt
 import pandas as pd
-from math import log10, sqrt
-from tokenization_stemming import preprocessing
+from tf_idf import calculate_tf_weight
+import re
 
-def insert_query(q, positional_index, tdf, normalized_tf_idf):
-    docs_found = put_query(q, positional_index, 2)
-    if not docs_found:
-        return "Not Found"
-    
-    print("Documents Found: ", docs_found)
-    new_q = preprocessing(q)
-    query = pd.DataFrame(index=normalized_tf_idf.index)
-    query['tf'] = [1 if x in new_q else 0 for x in list(normalized_tf_idf.index)]
-    query['w_tf'] = query['tf'].apply(lambda x: get_w_tf(x))
-    query['idf'] = tdf['idf'] * query['w_tf']
-    query['tf_idf'] = query['w_tf'] * query['idf']
-    query['normalized'] = 0
-    
-    for i in range(len(query)):
-        query.loc[query.index[i], 'normalized'] = float(query['idf'].iloc[i]) / sqrt(sum(query['idf'].values**2)) if sum(query['idf'].values**2) != 0 else 0
-    
-    print('Query') 
-    print(q)
-    print()
-    print('Query Tokenized')
-    print(new_q)
-    print()
-    print('Query Details')
-    if any(term in query.index for term in new_q):
-        if isinstance(new_q, list):
-            print(query[query.index.isin(new_q)])
+
+def process_phrase_query(phrase_query, pos_index):
+    final_set = set()
+    for word in phrase_query.split():
+        if word in pos_index:
+            final_set.update(pos_index[word][1].keys())
+    return final_set
+
+# Update the process_boolean_query function
+def process_boolean_query(boolean_query, pos_index):
+    boolean_query = re.sub(r'\s+', ' ', boolean_query)
+    boolean_query = boolean_query.strip().lower()
+
+    if ' and ' in boolean_query:
+        terms = boolean_query.split(' and ')
+        results = [process_phrase_query(term, pos_index) for term in terms]
+        final_result = set.intersection(*map(set, results))
+        matching_terms = set(terms)
+
+    elif ' or ' in boolean_query:
+        terms = boolean_query.split(' or ')
+        results = [process_phrase_query(term, pos_index) for term in terms]
+        final_result = set.union(*map(set, results))
+        matching_terms = set(terms)
+
+    elif ' not ' in boolean_query:
+        terms = boolean_query.split(' not ')
+        if len(terms) == 2:
+            included_docs = process_phrase_query(terms[0], pos_index)
+            excluded_docs = process_phrase_query(terms[1], pos_index)
+            final_result = included_docs - excluded_docs
+            matching_terms = set(terms)
         else:
-            print(query.loc[new_q])
+            raise ValueError("Invalid NOT operator usage")
+
     else:
-        print("None of the terms in the query are present in the DataFrame index.")
+        final_result = process_phrase_query(boolean_query, pos_index)
+        matching_terms = set([boolean_query])
+
+    return list(final_result), matching_terms
+
+
+
+def calculate_cosine_similarity(normalized_tf_idf, query_string, tfd, pos_index):
+    if ' and ' in query_string or ' or ' in query_string or ' not ' in query_string:
+
+        boolean_results, matching_terms = process_boolean_query(query_string, pos_index)
+        
+        query = pd.DataFrame(index=normalized_tf_idf.index)
+        query['tf'] = [1 if x in matching_terms else 0 for x in list(normalized_tf_idf.index)]
+
+        if not boolean_results:
+            raise ValueError(f'Error: Boolean query "{query_string}" did not match any documents.')
+
+        query = pd.DataFrame(index=normalized_tf_idf.index)
+        query['tf'] = [1 if x in boolean_results else 0 for x in list(normalized_tf_idf.index)]
+    else:
+        # It's a phrase query
+        query = pd.DataFrame(index=normalized_tf_idf.index)
+        query['tf'] = [1 if x in query_string.split() else 0 for x in list(normalized_tf_idf.index)]
+
+    query['w_tf'] = query['tf'].apply(calculate_tf_weight)
+
+    if query['w_tf'].sum() == 0:
+        raise ValueError('Error: Query does not match any terms in the documents.')
 
     product = normalized_tf_idf.multiply(query['w_tf'], axis=0)
-    product_result = product.multiply(query['normalized'], axis=0)
-    
-    print()
-    print('Product (query*matched doc)')
-    if any(term in product_result.index for term in new_q):
-        print(product_result.loc[product_result.index.isin(new_q)])
-    else:
-        print("None of the terms in the query are present in the DataFrame index.")
-    print()
-    print('Product Sum')
-    print(product_result.sum())
-    print()
-    print('Query Length')
-    q_len = sqrt(sum([x**2 for x in query['idf'].loc[list(set(new_q).intersection(query.index))]]))
-    print(q_len)
-    print()
-    print('Cosine Similarity')
-    print(product_result.sum())
-    print()
-    
+    query['idf'] = tfd['idf'] * query['w_tf']
+    query['tf-idf'] = query['w_tf'] * query['idf']
+    query['norm'] = query['idf'] / sqrt(sum(query['idf'].values ** 2))
+
+    return product, query
+
+
+def calculate_query_length(phrase_query, tfd):
+    return sqrt(sum([x ** 2 for x in tfd['idf'].loc[phrase_query.split()]]))
+
+def calculate_final_scores(product, query, phrase_query):
+    product2 = product.multiply(query['norm'], axis=0)
     scores = {}
-    for col in put_query(q, positional_index, 2):
-        scores[col] = product_result[col].sum()
-    
-    sorted_scores = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-    print('Returned docs')
-    for tuple in sorted_scores:
-        print(tuple[0], end=" ")
+    for col in product2.columns:
+        if 0 not in product2[col].loc[phrase_query.split()].values:
+            scores[col] = product2[col].sum()
 
-
-
-def put_query(q, positional_index, display=1):
-    lis = [[] for i in range(10)]
-    q = preprocessing(q)
-    
-    present_terms = []
-    
-    for term in q:
-        if term in positional_index.keys():
-            present_terms.append(term)
-            for doc_id, positions in positional_index[term]['positions'].items():
-                if lis[doc_id - 1] != []:
-                    if lis[doc_id - 1][-1] == positions[0] - 1:
-                        lis[doc_id - 1].append(positions[0])
-                else:
-                    lis[doc_id - 1].append(positions[0])
-    
-    positions = []
-    
-    if len(present_terms) == len(q):
-        if display == 1:
-            for pos, lst in enumerate(lis, start=1):
-                if len(lst) == len(q):
-                    positions.append('document ' + str(pos))
-        else:
-            for pos, lst in enumerate(lis, start=1):
-                if len(lst) == len(q):
-                    positions.append('doc' + str(pos))
-        return positions
-    else:
-        # Print terms that are not present in the index
-        missing_terms = set(q) - set(present_terms)
-        print(f"Terms not found in the index: {missing_terms}")
-        return []
-
-
-def get_w_tf(x):
-    try:
-        return log10(x) + 1
-    except:
-        return 0
+    return scores

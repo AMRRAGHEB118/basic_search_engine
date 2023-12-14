@@ -1,45 +1,95 @@
-from phrase_query import insert_query
-from positional_index import create_positional_index, display_positional_index
-from tf_idf import apply_weighted_tf, compute_df_idf, compute_normalized_tf_idf, compute_tf, compute_tf_idf, get_docs_len
-from tokenization_stemming import apply_tokenization_and_stemming, read_documents
-import pandas as pd
+from nltk.tokenize import word_tokenize
+from nltk.corpus import stopwords
+from nltk.stem import PorterStemmer
+import warnings
+from phrase_query import calculate_cosine_similarity, calculate_final_scores, calculate_query_length, process_boolean_query
+from positional_index import build_positional_index
+from tf_idf import calculate_doc_length, calculate_idf, calculate_tf, calculate_tf_idf, normalize_tf_idf
+from tokenization_stemming import read_documents, tokenize_and_stem
+
+warnings.filterwarnings("ignore")
+
 
 
 def main():
-    documents = apply_tokenization_and_stemming()
+    try:
+        print("_______________________________ First Part: Tokenization and Stemming _______________________________")
+        english_stops = set(stopwords.words('english'))
+        english_stops -= {'in', 'to', 'where'}
 
-    positional_index = create_positional_index(documents)
-    display_positional_index(positional_index)
+        porter = PorterStemmer()
 
-    documents = read_documents()
+        documents = read_documents('files')
+        stemmed_documents = tokenize_and_stem(documents, english_stops, porter)
+        print("\nStemmed Documents:")
+        for idx, doc in enumerate(stemmed_documents, start=1):
+            print(f"Document {idx}: {doc}")
 
-    tf = compute_tf(documents)
-    w_tf = apply_weighted_tf(documents, tf)
-    df_idf = compute_df_idf(w_tf, tf)
-    tf_idf = compute_tf_idf(w_tf, df_idf)
-    docs_len = get_docs_len(tf_idf)
-    normalized_tf_idf = compute_normalized_tf_idf(tf_idf, docs_len)
+        print("\nTokenization and Stopword Removal:")
+        for idx, doc in enumerate(documents, start=1):
+            tokenized_doc = word_tokenize(doc)
+            non_stemmed_doc = [word for word in tokenized_doc if word not in english_stops]
+            print(f"Document {idx} (Original): {doc}")
+            print(f"Document {idx} (Tokenized and Stopword Removed): {non_stemmed_doc}\n")
 
-    print("Term Frequency:")
-    print(pd.DataFrame(tf).fillna(0))
-    print("\nWeighted Term Frequency:")
-    print(pd.DataFrame(w_tf).fillna(0))
-    print("\nDF and IDF:")
-    print(df_idf)
-    print("\nTF-IDF Matrix:")
-    print(tf_idf)
-    print("\nDocuments Length:")
-    print(docs_len)
-    print("\nNormalized Term Frequency:")
-    print(normalized_tf_idf)
+        print("\n_______________________________ Second Part: Positional Index _______________________________")
+        pos_index = build_positional_index(stemmed_documents)
+        print("\nPositional Index:")
+        for term, details in pos_index.items():
+            print(f"Term: {term}, Document Frequency: {details[0]}, Positions: {details[1]}\n")
 
-    while True:
-        query = input("Enter a query (or type 'exit' to quit): ")
-        if query.lower() == 'exit':
-            break
+        print("\n_______________________________ Third Part: Phrase Query with Boolean Operators _______________________________")
+        boolean_query = input("Enter your boolean query: ")
+        boolean_results, matching_terms = process_boolean_query(boolean_query, pos_index)
+        print(f"\nDocuments matching the Boolean Query '{boolean_query}':")
+        print(boolean_results)
 
-        insert_query(query, positional_index, df_idf, normalized_tf_idf)
+        print("\n_______________________________ Fourth Part: TF-IDF Calculation _______________________________")
+        TF = calculate_tf(stemmed_documents)
+        print("\nTerm Frequency (TF):")
+        print(TF)
 
+        tfd = calculate_idf(TF)
+        print("\nInverse Document Frequency (IDF):")
+        print(tfd)
 
-if __name__ == "__main__":
+        tf_idf = calculate_tf_idf(TF, tfd)
+        print("\nTF-IDF:")
+        print(tf_idf)
+
+        doc_length = calculate_doc_length(tf_idf)
+        print("\nDocument Length:")
+        print(doc_length)
+
+        normalized_tf_idf = normalize_tf_idf(tf_idf, doc_length)
+        print("\nNormalized TF-IDF:")
+        print(normalized_tf_idf)
+
+        print("\n_______________________________ Fifth Part: Cosine Similarity _______________________________")
+        try:
+            product, query = calculate_cosine_similarity(normalized_tf_idf, boolean_query, tfd, pos_index)
+            print("\nQuery Information:")
+            print(query.loc[boolean_query.split()])
+
+            query_length = calculate_query_length(boolean_query, tfd)
+            print("\nQuery Length:", query_length)
+
+            scores = calculate_final_scores(product, query, boolean_query)
+            print("\nCosine Similarity Scores:")
+            for doc, score in scores.items():
+                print(f"Document {doc}: {score}")
+
+            final_score = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+            print("\nRanked Documents:")
+            for doc, score in final_score:
+                print(f"Document {doc}: {score}")
+                print()
+
+        except ValueError as e:
+            print(f'\nError: {e}')
+
+    except Exception as e:
+        print(f'\nError: {e}')
+
+if __name__ == '__main__':
     main()
